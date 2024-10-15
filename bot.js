@@ -1,6 +1,6 @@
 require("dotenv").config();
 
-const API_KEY_BOT = '7343499202:AAF75eXI_HVAAKklgGoVF0JqXa0OnrpBLdE'
+const API_KEY_BOT = '7597739965:AAGS-ehdbbtODxQ0x3IZz-Ba-L017aRNq8M'
 const ACCESS_KEY = 'AAFyizvudiwAchMfaXBJsZRA9e8QEoPwttM'
 const ADMIN_CHAT_ID = '7452921982'
 const TelegramBot = require('node-telegram-bot-api');

